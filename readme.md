@@ -1,16 +1,21 @@
-## Install Pipenv 
+### Installation
+**- Set up Pipenv on your machine**
 ```
 pip install pipenv
 ```
-## Enable env
 
+**- Enable virtualenv using Pipenv**
 ```
 pipenv shell
+```
+
+**- Install python libraries**
+```
 pipenv install
 ```
 
-## Please set AWS S3 configuration
-<b>Please config it in config.ini</b>
+**- AWS S3 configuration**
+Set AWS configuration in config.ini
 ```
 [AWS]
 ACCESS_KEY: your aws access key
@@ -19,20 +24,21 @@ REGION: your aws regison
 BUCKET: S3 Bucket name
 ```
 
-## How to run this script.
+### How to run.
 ```
 $ cd project_root
-python bot.py
+$ python bot.py
 ```
 
-## Properties
+### Properties
 It will run this script twice in a week.
+To change this schedule times, please config it in bot.py.
+
 -> Tuesday 18:00
 -> Friday 18:00
 
 
-## Reference.
-If you want to test it quickly, please disable the Time Schedule Block and enable Quick Test blok in bot.py file.
+> ***If you want to test it quickly, please disable the Time Schedule Block and enable Quick Test blok in bot.py file.***
 
 This is a Time Schedule Block.
 
