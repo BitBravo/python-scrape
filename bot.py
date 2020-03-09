@@ -279,7 +279,6 @@ def get_contract(url):
 
 def main():
     log_content = utils.get_log(base_urls)
-    print(log_content)
 
     try:
         for target in base_urls:
@@ -324,7 +323,7 @@ def main():
 
                 # Download files and save contents
                 if contract:
-                    if target["category"] == "corrected_notices":
+                    if target["category"] == "contracts":
                         utils.download_html(folder_path, link.url, contract["page_content"])
                         utils.download_files(folder_path, contract["file_links"])
                         utils.append_new_row(csv_file_path, contract["contract_detail"], field_names["all"])
@@ -341,36 +340,13 @@ def main():
 
 
 # Time Schdule 
-# schedule.every().tuesday.at("18:00").do(main)
-# schedule.every().friday.at("18:00").do(main)
+schedule.every().tuesday.at("18:00").do(main)
+schedule.every().friday.at("18:00").do(main)
 
-# while True:
-#     schedule.run_pending()
-#     sleep(10)
+while True:
+    schedule.run_pending()
+    sleep(10)
 
 # Quick TEST
-main()
-test_urls = [
-    "http://www.ccgp-beijing.gov.cn/xxgg/sjzfcggg/sjgzgg/t20200306_1203273.html",
-    "http://www.ccgp-beijing.gov.cn/xxgg/sjzfcggg/sjhtgg/t20200305_1203006.html"
-]
+# main()
 
-# contract = get_contract(test_urls[0])
-# print(contract.get("title"))
-# print(getattr(contract, "title"))
-# print(ddd["contract_detail"]["title"])
-
-# # utils.download_files(folder_path, contract["file_links"])
-# utils.download_html("folder_path", test_urls[0], contract["page_body"])
-# utils.html2pdf("folder_path", test_urls[0], contract["page_body"])
-
-test = [
-    {"aa": "hello", "bb": "how are you" },
-    {"aa": "thanks", "bb": "welcome" }
-]
-
-ss = "failed_noticess"
-# print(test[0]["aa"])
-# index = next((base_urls[i] for i, item in enumerate(base_urls) if item["category"] == ss and item["level"] == 'municipal'), -1)
-# print(index)
-# level": "municipal
