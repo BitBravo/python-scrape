@@ -2,7 +2,10 @@ import boto3
 import os
 import csv
 import json
+import sys
 import re
+import subprocess
+from xhtml2pdf import pisa
 import configparser
 from requests import get
 from datetime import datetime, timedelta
@@ -64,15 +67,17 @@ def get_item_exist(old, item):
     else:
         return False
 
-def append_new_row(file_name, list_of_elem):
-    field_names = ['title', 'category', 'publish_date', 'contract_number', 'contract_name', 'serial_number', 'item_name',
-               'purchaser', 'supplier', 'region', 'price', 'signed_date', 'contract_publish_date', 'agency_name', 'deal_notice', 'appendix']
-    file_path = CSV_PATH + file_name
-    with open(file_path, 'a', newline='') as f:
+def append_new_row(csv_file_path, list_of_elem, field_names):
+    create_folder(csv_file_path.rsplit("/", 1)[0])
+    lineArray = []
+    for field in field_names:
+        lineArray.append(getattr(list_of_elem, field))
+
+    with open(csv_file_path, 'a', newline='') as f:
         writer = csv.writer(f)
-        if not file_validate(file_path):
+        if not file_validate(csv_file_path):
             writer.writerow(field_names)
-        writer.writerow(list_of_elem)
+        writer.writerow(lineArray)
         f.close()
 
 
@@ -86,12 +91,11 @@ def create_folder(dir):
 
 def download_files(deal_folder_dir, file_links):
     if len(file_links) > 0:
-        folder_path = FILE_PATH + deal_folder_dir
-        create_folder(folder_path)
+        create_folder(deal_folder_dir)
 
     for link in file_links:
         file_name = link.split('/')[-1]
-        file_path = folder_path + '/' + file_name
+        file_path = deal_folder_dir + '/' + file_name
 
         print("Started downloading file:%s" % file_name)
         # create response object
@@ -110,9 +114,8 @@ def download_files(deal_folder_dir, file_links):
 
 def download_html(deal_folder_dir, url, content):
     file_name = url.split('/')[-1]
-    folder_path = FILE_PATH + deal_folder_dir
-    file_path = folder_path + '/' + file_name
-    create_folder(folder_path)
+    file_path = deal_folder_dir + '/' + file_name
+    create_folder(deal_folder_dir)
 
     print("Started downloading file:%s" % file_name)
 
@@ -124,23 +127,56 @@ def download_html(deal_folder_dir, url, content):
     print("Finished downloading! %s \n" % file_name)
     return
 
-def get_log():
+def html2pdf(deal_folder_dir, url, sourceHtml):
+    file_name = url.split('/')[-1]
+    file_name = re.sub(r'\.html?', '.pdf', file_name)
+
+    file_path = deal_folder_dir + '/' + file_name
+    create_folder(deal_folder_dir)
+
+    contentData =  """<style>
+                    @font-face {
+                        font-family: 'DejaVu Sans';
+                        src: url('./chinese.ttf');
+                    }
+                    html,body{
+                        font-size: 12pt; 
+                        font-family: 'DejaVu Sans'
+                    }
+              </style>
+            """ + sourceHtml
+    print("Started downloading file:%s" % file_name)
+
+    try:
+        resultFile = open(file_path, "w+b")
+        pisaStatus = pisa.CreatePDF(contentData, resultFile)
+        resultFile.close()
+    except:
+        if open and (not pisaStatus.err):
+            if sys.platform == "win32":
+                os.startfile(file_path)
+            else:
+                print(os)
+                opener = "open" if sys.platform == "darwin" else "xdg-open"
+                subprocess.call([opener, file_path])
+
+    return pisaStatus.err
+
+def get_log(lists):
     try:
         with open('log.json') as json_file:
             return json.load(json_file)
     except:
-        default = {
-            "0": {
-                "url": None,
-                "date": (datetime.now() - timedelta(days=5)).strftime('%Y-%m-%d'),
+        logs = []
+        for item in lists:
+            logs.append({
+                "level": item["level"],
+                "category": item["category"],
+                 "url": None,
+                "date": (datetime.now() - timedelta(days=3)).strftime('%Y-%m-%d'),
                 "title": None
-            }, "1": {
-                "url": None,
-                "date": (datetime.now() - timedelta(days=5)).strftime('%Y-%m-%d'),
-                "title": None
-            }
-        }
-        return default
+            })
+        return logs
 
 
 def write_log(data):

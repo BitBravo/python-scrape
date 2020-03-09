@@ -13,15 +13,29 @@ import schedule
 configParser = configparser.RawConfigParser()
 configParser.read('config.ini')
 CSV_PATH = configParser.get('LOCAL', 'CSV_DIR')
+FILE_PATH = configParser.get('LOCAL', 'FILE_DIR')
 log_status = {}
 
 base_urls = [
-    "http://www.ccgp-beijing.gov.cn/xxgg/sjzfcggg/sjhtgg/index.html",
-    "http://www.ccgp-beijing.gov.cn/xxgg/qjzfcggg/index.html"
+    { "level": "municipal", "category": "tender_notices", "url": "http://www.ccgp-beijing.gov.cn/xxgg/sjzfcggg/sjzbgg/index.html" },
+    { "level": "municipal", "category": "deal_notices", "url": "http://www.ccgp-beijing.gov.cn/xxgg/sjzfcggg/sjzbjggg/index.html" },
+    { "level": "municipal", "category": "contracts", "url": "http://www.ccgp-beijing.gov.cn/xxgg/sjzfcggg/sjhtgg/index.html" },
+    { "level": "municipal", "category": "corrected_notices", "url": "http://www.ccgp-beijing.gov.cn/xxgg/sjzfcggg/sjgzgg/index.html" },
+    { "level": "municipal", "category": "failed_notices", "url": "http://www.ccgp-beijing.gov.cn/xxgg/sjzfcggg/sjfbgg/index.html" },
+    { "level": "municipal", "category": "single_source_notices", "url": "http://www.ccgp-beijing.gov.cn/xxgg/sjzfcggg/sjdygg/index.html" },
+    { "level": "district", "category": "tender_notices", "url": "http://www.ccgp-beijing.gov.cn/xxgg/qjzfcggg/qjzbgg/index.html" },
+    { "level": "district", "category": "deal_notices", "url": "http://www.ccgp-beijing.gov.cn/xxgg/qjzfcggg/qjzbjggg/index.html" },
+    { "level": "district", "category": "contracts", "url": "http://www.ccgp-beijing.gov.cn/xxgg/qjzfcggg/qjhtgg/index.html" },
+    { "level": "district", "category": "corrected_notices", "url": "http://www.ccgp-beijing.gov.cn/xxgg/qjzfcggg/qjgzgg/index.html" },
+    { "level": "district", "category": "failed_notices", "url": "http://www.ccgp-beijing.gov.cn/xxgg/qjzfcggg/qjfbgg/index.html" },
+    { "level": "district", "category": "single_source_notices", "url": "http://www.ccgp-beijing.gov.cn/xxgg/qjzfcggg/qjdygg/index.html" }
 ]
 
-pages = [str(i) for i in range(1, 5)]
-years_url = [str(i) for i in range(2000, 2018)]
+field_names = {
+    "all": ['title', 'category', 'publish_date', 'contract_number', 'contract_name', 'serial_number', 'item_name', 'purchaser', 'supplier', 'region', 'price', 'signed_date', 'contract_publish_date', 'agency_name', 'deal_notice', 'appendix', 'source_url', 'id'],
+    "sub": ['title', 'category', 'publish_date', 'source_url', 'id']
+}
+
 headers = {"Accept-Language": "en-US, en;q=0.5"}
 
 
@@ -53,6 +67,8 @@ class Contracts:
         self.agency_name = ''
         self.deal_notice = ''
         self.appendix = ''
+        self.source_url = ''
+        self.id = ''
 
 def url_split(url, index, option):
     return url.rsplit('/', index)[option]
@@ -178,6 +194,7 @@ def get_links(url, page_num=0):
 
 def get_contract(url):
     # Make a get request
+    print("URL ====>", url)
     response = get(url, headers=headers)
     sleep(1)
     elapsed_time = time() - start_time
@@ -193,6 +210,8 @@ def get_contract(url):
         try:
             contract = Contracts()
             # Select all the link containers from a single page
+            contract.source_url = url
+            contract.id = url.rsplit("/", 1)[1].split(".")[0]
             contract.title = get_txt(page_html.select_one(
                 'div>span[style="font-size: 20px;font-weight: bold"]'))
 
@@ -202,6 +221,8 @@ def get_contract(url):
             contract.category = remove_space(category_string)
             contract.publish_date = get_txt(
                 head_container.find('span', class_="datetime"))
+
+            pageBody = page_html.select_one('div[style="width: 1105px;margin:0 auto"]')
 
             table_date = page_html.select('tr>td[colspan="3"]')
 
@@ -222,23 +243,27 @@ def get_contract(url):
                 contract.deal_notice = get_txt(table_date[11].find('a'))
                 contract.appendix = get_txt(page_html.select_one('p>a[href]'))
 
-            contract_arry = []
-            for _, value in contract.__dict__.items():
-                contract_arry.append(value)
+            # contract_arry = []
+            # for _, value in contract.__dict__.items():
+            #     contract_arry.append(value)
 
             sleep(3)
             all_links = [get_download_link(url, link['href']) for link in page_html.select(
                 'p>a[href]') if get_download_link(url, link['href'])]
 
+            # print(contract_arry)
+            # print(all_links)
+            # print(pageBody)
             # download_files(deal_folder_dir, all_links)
             # download_html(url, response.text)
             # updated_html = update_links(response.text)
             # constract_str = json.dumps(contract.__dict__,ensure_ascii=False).encode('gbk').decode('gbk')
             # return json.loads(constract_str, object_hook=lambda d: recordclass('X', d.keys())(*d.values()))
             return {
-                "contract_detail": contract_arry,
+                "contract_detail": contract,
                 "file_links": all_links,
-                "page_content": response.text
+                "page_content": response.text,
+                "page_body": pageBody.prettify()
             }
 
         except Exception as e:
@@ -253,40 +278,39 @@ def get_contract(url):
 
 
 def main():
+    log_content = utils.get_log(base_urls)
+    print(log_content)
+
     try:
-        for i, target in enumerate(base_urls):
+        for target in base_urls:
             # Get CSV file path and File Prefix
-            file_prefix = configParser.get('LOCAL', 'FILE_PREFIX' + str(i))
-            csv_file_name = file_prefix + ".csv"
-            csv_file_path = CSV_PATH + csv_file_name
-            folder_prefix = "files_" + file_prefix
-
-
+            csv_file_name = target["category"] + ".csv"
+            csv_file_path = CSV_PATH + target["level"] + "/" + csv_file_name
+            folder_prefix = FILE_PATH + target["level"] + "/" + target["category"]
+            processingId = target["level"] + "->" + target["category"]
+            
             # Get log content to check what is a last action
             global log_status
-            log_content = utils.get_log()
-            log_status = log_content[str(i)]
-
-
+            logIndex = next((i for i, item in enumerate(log_content) if item["category"] == target["category"] and item["level"] == target["level"]), -1)
+            log_status = log_content[logIndex]
 
             # Get all contract links based on category
-            add_console("Grabbing new links for " + file_prefix)
-            new_links = get_links(target, 0)
+            add_console("Grabbing new links for " + processingId)
+            new_links = get_links(target["url"], 0)
         
 
             # Update log with current action info when there are new updates
             if len(new_links) > 0:
-                add_console("Updating log for " + file_prefix)
-                log_content[str(i)]["date"] = new_links[0].date
-                log_content[str(i)]["url"] = new_links[0].url
-                log_content[str(i)]["title"] = new_links[0].title
+                add_console("Updating log for " + processingId)
+                log_content[logIndex]["date"] = new_links[0].date
+                log_content[logIndex]["url"] = new_links[0].url
+                log_content[logIndex]["title"] = new_links[0].title
 
                 # Update log file
                 utils.write_log(log_content)
-                add_console("Starting to grab contract for " + file_prefix)
+                add_console("Starting to grab contract for " + processingId)
             else:
-                add_console("There is no new contracts in " + file_prefix)
-
+                add_console("There is no new contracts in " + processingId)
 
 
             # Get contract details, Download attached files, Save html contents, and Add it to CSV 
@@ -300,11 +324,16 @@ def main():
 
                 # Download files and save contents
                 if contract:
-                    utils.download_files(folder_path, contract["file_links"])
-                    utils.download_html(folder_path, link.url, contract["page_content"])
-                    utils.append_new_row(csv_file_name, contract["contract_detail"])
+                    if target["category"] == "corrected_notices":
+                        utils.download_html(folder_path, link.url, contract["page_content"])
+                        utils.download_files(folder_path, contract["file_links"])
+                        utils.append_new_row(csv_file_path, contract["contract_detail"], field_names["all"])
+                    else:
+                        utils.download_html(folder_path, link.url, contract["page_body"])
+                        utils.html2pdf(folder_path, link.url, contract["page_body"])
+                        utils.append_new_row(csv_file_path, contract["contract_detail"], field_names["sub"])
 
-            utils.upload_objects(csv_file_path)
+            # utils.upload_objects(csv_file_path)
     
     except Exception as e:
         print("error", e)
@@ -312,12 +341,36 @@ def main():
 
 
 # Time Schdule 
-schedule.every().tuesday.at("18:00").do(main)
-schedule.every().friday.at("18:00").do(main)
+# schedule.every().tuesday.at("18:00").do(main)
+# schedule.every().friday.at("18:00").do(main)
 
-while True:
-    schedule.run_pending()
-    sleep(10)
+# while True:
+#     schedule.run_pending()
+#     sleep(10)
 
 # Quick TEST
-# main()
+main()
+test_urls = [
+    "http://www.ccgp-beijing.gov.cn/xxgg/sjzfcggg/sjgzgg/t20200306_1203273.html",
+    "http://www.ccgp-beijing.gov.cn/xxgg/sjzfcggg/sjhtgg/t20200305_1203006.html"
+]
+
+# contract = get_contract(test_urls[0])
+# print(contract.get("title"))
+# print(getattr(contract, "title"))
+# print(ddd["contract_detail"]["title"])
+
+# # utils.download_files(folder_path, contract["file_links"])
+# utils.download_html("folder_path", test_urls[0], contract["page_body"])
+# utils.html2pdf("folder_path", test_urls[0], contract["page_body"])
+
+test = [
+    {"aa": "hello", "bb": "how are you" },
+    {"aa": "thanks", "bb": "welcome" }
+]
+
+ss = "failed_noticess"
+# print(test[0]["aa"])
+# index = next((base_urls[i] for i, item in enumerate(base_urls) if item["category"] == ss and item["level"] == 'municipal'), -1)
+# print(index)
+# level": "municipal

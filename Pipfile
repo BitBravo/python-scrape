@@ -18,6 +18,9 @@ collections = "*"
 recordclass = "*"
 subprocess = "*"
 schedule = "*"
+xhtml2pdf = "*"
+cstringio = "*"
+stringio = "*"
 
 [requires]
 python_version = "3.8"
