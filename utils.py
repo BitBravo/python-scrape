@@ -173,7 +173,7 @@ def get_log(lists):
                 "level": item["level"],
                 "category": item["category"],
                  "url": None,
-                "date": (datetime.now() - timedelta(days=3)).strftime('%Y-%m-%d'),
+                "date": (datetime.now() - timedelta(days=5)).strftime('%Y-%m-%d'),
                 "title": None
             })
         return logs
