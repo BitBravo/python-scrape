@@ -342,5 +342,5 @@ while True:
     sleep(10)
 
 # Quick TEST
-main()
+# main()
 
