@@ -321,7 +321,8 @@ def main():
                         utils.append_new_row(csv_file_path, contract["contract_detail"], field_names["all"])
                     else:
                         utils.download_html(folder_path, link.url, contract["page_body"])
-                        utils.html2pdf(folder_path, link.url, contract["page_body"])
+                        utils.download_files(folder_path, contract["file_links"])
+                        # utils.html2pdf(folder_path, link.url, contract["page_body"])
                         utils.append_new_row(csv_file_path, contract["contract_detail"], field_names["sub"])
 
             add_console("File Upload: " + csv_file_path)
@@ -341,5 +342,5 @@ while True:
     sleep(10)
 
 # Quick TEST
-# main()
+main()
 
