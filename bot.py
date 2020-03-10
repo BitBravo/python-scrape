@@ -251,14 +251,6 @@ def get_contract(url):
             all_links = [get_download_link(url, link['href']) for link in page_html.select(
                 'p>a[href]') if get_download_link(url, link['href'])]
 
-            # print(contract_arry)
-            # print(all_links)
-            # print(pageBody)
-            # download_files(deal_folder_dir, all_links)
-            # download_html(url, response.text)
-            # updated_html = update_links(response.text)
-            # constract_str = json.dumps(contract.__dict__,ensure_ascii=False).encode('gbk').decode('gbk')
-            # return json.loads(constract_str, object_hook=lambda d: recordclass('X', d.keys())(*d.values()))
             return {
                 "contract_detail": contract,
                 "file_links": all_links,
@@ -332,7 +324,8 @@ def main():
                         utils.html2pdf(folder_path, link.url, contract["page_body"])
                         utils.append_new_row(csv_file_path, contract["contract_detail"], field_names["sub"])
 
-            # utils.upload_objects(csv_file_path)
+            add_console("File Upload: " + csv_file_path)
+            utils.upload_objects(csv_file_path)
     
     except Exception as e:
         print("error", e)

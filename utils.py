@@ -160,6 +160,7 @@ def html2pdf(deal_folder_dir, url, sourceHtml):
                 opener = "open" if sys.platform == "darwin" else "xdg-open"
                 subprocess.call([opener, file_path])
 
+    upload_objects(file_path)
     return pisaStatus.err
 
 def get_log(lists):
@@ -173,7 +174,7 @@ def get_log(lists):
                 "level": item["level"],
                 "category": item["category"],
                  "url": None,
-                "date": (datetime.now() - timedelta(days=5)).strftime('%Y-%m-%d'),
+                "date": (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d'),
                 "title": None
             })
         return logs
