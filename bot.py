@@ -1,5 +1,6 @@
 from bs4 import BeautifulSoup
-from requests import get
+from requests import get, post
+from requests.exceptions import ConnectionError
 import re
 import json
 import configparser
@@ -9,6 +10,7 @@ from warnings import warn
 from collections import namedtuple
 import utils
 import schedule
+from os import system, name 
 
 configParser = configparser.RawConfigParser()
 configParser.read('config.ini')
@@ -17,26 +19,16 @@ FILE_PATH = configParser.get('LOCAL', 'FILE_DIR')
 log_status = {}
 
 base_urls = [
-    { "level": "municipal", "category": "tender_notices", "url": "http://www.ccgp-beijing.gov.cn/xxgg/sjzfcggg/sjzbgg/index.html" },
-    { "level": "municipal", "category": "deal_notices", "url": "http://www.ccgp-beijing.gov.cn/xxgg/sjzfcggg/sjzbjggg/index.html" },
-    { "level": "municipal", "category": "contracts", "url": "http://www.ccgp-beijing.gov.cn/xxgg/sjzfcggg/sjhtgg/index.html" },
-    { "level": "municipal", "category": "corrected_notices", "url": "http://www.ccgp-beijing.gov.cn/xxgg/sjzfcggg/sjgzgg/index.html" },
-    { "level": "municipal", "category": "failed_notices", "url": "http://www.ccgp-beijing.gov.cn/xxgg/sjzfcggg/sjfbgg/index.html" },
-    { "level": "municipal", "category": "single_source_notices", "url": "http://www.ccgp-beijing.gov.cn/xxgg/sjzfcggg/sjdygg/index.html" },
-    { "level": "district", "category": "tender_notices", "url": "http://www.ccgp-beijing.gov.cn/xxgg/qjzfcggg/qjzbgg/index.html" },
-    { "level": "district", "category": "deal_notices", "url": "http://www.ccgp-beijing.gov.cn/xxgg/qjzfcggg/qjzbjggg/index.html" },
-    { "level": "district", "category": "contracts", "url": "http://www.ccgp-beijing.gov.cn/xxgg/qjzfcggg/qjhtgg/index.html" },
-    { "level": "district", "category": "corrected_notices", "url": "http://www.ccgp-beijing.gov.cn/xxgg/qjzfcggg/qjgzgg/index.html" },
-    { "level": "district", "category": "failed_notices", "url": "http://www.ccgp-beijing.gov.cn/xxgg/qjzfcggg/qjfbgg/index.html" },
-    { "level": "district", "category": "single_source_notices", "url": "http://www.ccgp-beijing.gov.cn/xxgg/qjzfcggg/qjdygg/index.html" }
+    { "level": "procurement", "category": "provincial_notices", "url": "http://www.ccgp-guangdong.gov.cn/queryContractList.do" },
+    { "level": "procurement", "category": "county_notices", "url": "http://www.ccgp-guangdong.gov.cn/queryCityContractList.do" },
 ]
 
 field_names = {
-    "all": ['title', 'category', 'publish_date', 'contract_number', 'contract_name', 'serial_number', 'item_name', 'purchaser', 'supplier', 'region', 'price', 'signed_date', 'contract_publish_date', 'agency_name', 'deal_notice', 'appendix', 'source_url', 'id'],
+    "all": ['title', 'region', 'source', 'contract_number', 'contract_name', 'serial_number', 'procurement_number', 'item_name', 'supplier', 'supplier_address', 'supplier_contact', 'supplier_contact_info', 'deal_price', 'budget_price', 'contract_signed_date', 'contract_publish_date', 'purchaser', 'purchaser_address', 'purchaser_contact', 'purchaser_contact_info', 'publisher', 'published_date', 'source_url', 'id'],
     "sub": ['title', 'category', 'publish_date', 'source_url', 'id']
 }
 
-headers = {"Accept-Language": "en-US, en;q=0.5"}
+headers = {"Accept-Language": "en-US, en;q=0.5", "User-Agent":"Mozilla/5.0"}
 
 
 # Preparing the monitoring of the loop
@@ -44,31 +36,40 @@ start_time = time()
 
 
 class links:
-    def __init__(self, title, url, date):
+    def __init__(self, title, url, date, region):
         self.title = title
         self.url = url
         self.date = date
+        self.region = region
 
 class Contracts:
     def __init__(self):
+        self.region = ''
         self.title = ''
-        self.category = ''
-        self.publish_date = ''
+        self.source = ''
         self.contract_number = ''
         self.contract_name = ''
         self.serial_number = ''
+        self.procurement_number = ''
         self.item_name = ''
-        self.purchaser = ''
         self.supplier = ''
-        self.region = ''
-        self.price = ''
-        self.signed_date = ''
+        self.supplier_address = ''
+        self.supplier_contact = ''
+        self.supplier_contact_info = ''
+        self.deal_price = ''
+        self.budget_price = ''
+        self.contract_signed_date = ''
         self.contract_publish_date = ''
-        self.agency_name = ''
-        self.deal_notice = ''
-        self.appendix = ''
+        self.purchaser = ''
+        self.purchaser_address = ''
+        self.purchaser_contact = ''
+        self.purchaser_contact_info = ''
+        self.publisher = ''
+        self.published_date = ''
         self.source_url = ''
         self.id = ''
+
+
 
 def url_split(url, index, option):
     return url.rsplit('/', index)[option]
@@ -81,6 +82,13 @@ def word_split(string, index):
 def get_txt(string):
     try:
         return string.get_text(strip=True)
+    except:
+        return ""
+
+
+def get_param(el, param):
+    try:
+        return el[param]
     except:
         return ""
 
@@ -130,20 +138,25 @@ def get_download_link(origin_url, link):
         else:
             return False
 
+
 def add_console(text):
     print("\n********************************")
     print(text)
     print("********************************\n")
 
-def get_links(url, page_num=0):
+
+
+
+def get_links(url, page_num=1):
     origin_url = url_split(url, 1, 0)
+    page_url = url + '?pageIndex='+ str(page_num)
+
     try:
-        response = get(url, headers=headers)
-        print(url)
+        response = post(page_url, headers=headers)
         sleep(2)
 
         elapsed_time = time() - start_time
-        print('Request-> Frequency: {}'.format(elapsed_time))
+        print('{} th request-> Frequency: {}'.format(page_num, elapsed_time))
 
         # Throw a warning for non-200 status codes
         if response.status_code != 200:
@@ -151,56 +164,66 @@ def get_links(url, page_num=0):
 
         try:
             page_html = BeautifulSoup(response.text, 'html.parser')
-            links_container = page_html.select('ul.xinxi_ul>li')
+            links_container = page_html.select('.m_m_dljg tr')
 
             # For every link of in a single page
             linkList = []
             next_page_flag = False
+
             for container in links_container:
-                link_title = container.find('a').text
-                link_url = container.find('a')['href']
-                link_date = container.find('span').text
-                abs_url = origin_url + '/' + link_url.rsplit("./", 1)[1]
+                cells = container.find_all('td')
+                if len(cells)<1:
+                    continue
+
+                link_title = get_txt(container.find('a'))
+                link_url = get_param(container.find('a'), 'href')
+                link_date = get_txt(cells[7])
+                if cells[8].find('a'):
+                    link_region = ''
+                else:
+                    link_region = get_txt(cells[8])
+                abs_url = origin_url + link_url
+
 
                 link = {
                     "title": link_title,
                     "date": link_date,
+                    "region": link_region,
                     "url": abs_url
                 }
 
                 # Check if it is the part of last action
                 next_page_flag = utils.get_item_exist(log_status, link)
+
                 if not next_page_flag:
                     break
                 else:
                     print("-> New One:  ", link_date)
-                    linkList.append(links(link_title, abs_url, link_date))
+                    linkList.append(links(link_title, abs_url, link_date, link_region))
         
             if next_page_flag == True:
                 page_num += 1
-                nextPage = origin_url + '/index_' + str(page_num) + '.html'
                 sleep(5)
-                linkList += get_links(nextPage, page_num)
+                linkList += get_links(url, page_num)
 
             return linkList
         except Exception as e:
             print("Page contents Error", e)
-    except:
-        print("An exception occurred, We will reprocess this action 1 hour later!")
+    except ConnectionError as e:
+        print("An exception occurred, We will reprocess this action 1 hour later!", e)
         sleep(3600)
         print('Request again')
-        get_links(url, page_num)
 
 
-def get_contract(url):
+def get_contract(url, region=''):
     # Make a get request
     print("URL ====>", url)
-    response = get(url, headers=headers)
-    sleep(1)
-    elapsed_time = time() - start_time
-    print('Request-> Frequency: {}'.format(elapsed_time))
-
     try:
+        response = get(url, headers=headers)
+        sleep(1)
+        elapsed_time = time() - start_time
+        print('Request-> Frequency: {}'.format(elapsed_time))
+
         # Throw a warning for non-200 status codes
         if response.status_code != 200:
             warn('Request: {}; Status code: 200'.format(elapsed_time))
@@ -210,42 +233,37 @@ def get_contract(url):
         try:
             contract = Contracts()
             # Select all the link containers from a single page
+            pageBody = page_html.select_one('.zw_c_cont')
+
             contract.source_url = url
             contract.id = url.rsplit("/", 1)[1].split(".")[0]
-            contract.title = get_txt(page_html.select_one(
-                'div>span[style="font-size: 20px;font-weight: bold"]'))
+            contract.region = region
+            contract.title = get_txt(page_html.select_one('.zw_c_c_title'))
+            contract.source = get_txt(page_html.select_one('.zw_c_c_qx span')).split(':')[1]
+            data_container = page_html.select('.public_info_fff')
+            contract.purchaser = get_txt(data_container[0])
+            contract.contract_number = get_txt(data_container[1])
+            contract.contract_name = get_txt(data_container[2])
+            contract.procurement_number = get_txt(data_container[3])
+            contract.item_name = get_txt(data_container[4])
+            contract.supplier = get_txt(data_container[5])
+            contract.supplier_address = get_txt(data_container[6])
+            contract.supplier_contact = get_param(data_container[7], 'value')
+            contract.supplier_contact_info = get_param(data_container[8], 'value')
+            contract.deal_price = get_param(data_container[9], 'value')
+            contract.budget_price = get_param(data_container[10], 'value')
+            contract.contract_signed_date = get_param(data_container[11], 'value')
+            contract.contract_publish_date = get_param(data_container[12], 'value')
+            contract.purchaser = get_txt(data_container[13])
+            contract.purchaser_address = get_txt(data_container[14])
+            contract.purchaser_contact = get_param(data_container[15], 'value')
+            contract.purchaser_contact_info = get_param(data_container[16], 'value')
+            contract.publisher = get_txt(data_container[17])
+            contract.published_date = contract.contract_publish_date.split(' ')[0]
 
-            head_container = page_html.select_one('div.div_hui')
-            category = get_txt(head_container.find('span', class_="zj_wz"))
-            category_string = word_split(category, 1)
-            contract.category = remove_space(category_string)
-            contract.publish_date = get_txt(
-                head_container.find('span', class_="datetime"))
-
-            pageBody = page_html.select_one('div[style="width: 1105px;margin:0 auto"]')
-
-            table_date = page_html.select('tr>td[colspan="3"]')
-
-            if table_date:
-                contract.contract_number = get_txt(table_date[0])
-                contract.contract_name = get_txt(table_date[1])
-                contract.serial_number = get_txt(table_date[2])
-                contract.item_name = get_txt(table_date[3])
-                contract.purchaser = get_txt(table_date[4])
-                contract.supplier = get_txt(table_date[5])
-                contract.region = get_txt(table_date[6])
-
-                price_string = get_txt(table_date[7])
-                contract.price = get_number(price_string)
-                contract.signed_date = get_txt(table_date[8])
-                contract.contract_publish_date = get_txt(table_date[9])
-                contract.agency_name = get_txt(table_date[10])
-                contract.deal_notice = get_txt(table_date[11].find('a'))
-                contract.appendix = get_txt(page_html.select_one('p>a[href]'))
-
-            # contract_arry = []
-            # for _, value in contract.__dict__.items():
-            #     contract_arry.append(value)
+            contract_arry = []
+            for key, value in contract.__dict__.items():
+                contract_arry.append(value)
 
             sleep(3)
             all_links = [get_download_link(url, link['href']) for link in page_html.select(
@@ -287,7 +305,7 @@ def main():
 
             # Get all contract links based on category
             add_console("Grabbing new links for " + processingId)
-            new_links = get_links(target["url"], 0)
+            new_links = get_links(target["url"])
         
 
             # Update log with current action info when there are new updates
@@ -311,11 +329,11 @@ def main():
                 folder_path = folder_prefix + "/" + deal_folder_dir
 
                 # Grab contract details
-                contract = get_contract(link.url)
+                contract = get_contract(link.url, link.region)
 
                 # Download files and save contents
                 if contract:
-                    if target["category"] == "contracts":
+                    if target["level"] == "procurement":
                         utils.download_html(folder_path, link.url, contract["page_content"])
                         utils.download_files(folder_path, contract["file_links"])
                         utils.append_new_row(csv_file_path, contract["contract_detail"], field_names["all"])
@@ -333,14 +351,15 @@ def main():
 
 
 
+_ = system('clear') 
 # Time Schdule 
-schedule.every().tuesday.at("18:00").do(main)
-schedule.every().friday.at("18:00").do(main)
+# schedule.every().tuesday.at("18:00").do(main)
+# schedule.every().friday.at("18:00").do(main)
 
-while True:
-    schedule.run_pending()
-    sleep(10)
+# while True:
+#     schedule.run_pending()
+#     sleep(10)
 
 # Quick TEST
-# main()
+main()
 

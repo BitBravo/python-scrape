@@ -4,23 +4,16 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 
 [dev-packages]
-pylint = "*"
-autopep8 = "*"
 
 [packages]
-beautifulsoup4 = "*"
 python-crontab = "*"
 requests = "*"
-boto3 = "*"
 configparser = "*"
-csv = "*"
-collections = "*"
 recordclass = "*"
-subprocess = "*"
 schedule = "*"
 xhtml2pdf = "*"
-cstringio = "*"
-stringio = "*"
+bs4 = "*"
+boto3 = "*"
 
 [requires]
 python_version = "3.8"
