@@ -56,7 +56,7 @@ def item_validate(fpath, title, date):
 def get_item_exist(old, item):
     old_date = datetime.strptime(old["date"],  '%Y-%m-%d')
     cur_date = datetime.strptime(item["date"],  '%Y-%m-%d')
-
+    
     if cur_date > old_date:
         return True
     elif cur_date == old_date:
@@ -174,7 +174,7 @@ def get_log(lists):
                 "level": item["level"],
                 "category": item["category"],
                  "url": None,
-                "date": (datetime.now() - timedelta(days=5)).strftime('%Y-%m-%d'),
+                "date": (datetime.now() - timedelta(days=4)).strftime('%Y-%m-%d'),
                 "title": None
             })
         return logs
