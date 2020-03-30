@@ -220,6 +220,7 @@ def get_links(url, page_num=1):
         else:
             print("Request again!")
             sleep(1)
+        get_links(url, page_num)
 
 
 def get_contract(url, region=''):
