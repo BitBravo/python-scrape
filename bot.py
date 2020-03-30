@@ -17,6 +17,7 @@ configParser.read('config.ini')
 CSV_PATH = configParser.get('LOCAL', 'CSV_DIR')
 FILE_PATH = configParser.get('LOCAL', 'FILE_DIR')
 log_status = {}
+error_count = 0
 
 base_urls = [
     { "level": "procurement", "category": "provincial_notices", "url": "http://www.ccgp-guangdong.gov.cn/queryContractList.do" },
@@ -148,6 +149,7 @@ def add_console(text):
 
 
 def get_links(url, page_num=1):
+    global error_count
     origin_url = url_split(url, 1, 0)
     page_url = url + '?pageIndex='+ str(page_num)
 
@@ -193,6 +195,7 @@ def get_links(url, page_num=1):
                 }
 
                 # Check if it is the part of last action
+                error_count = 0
                 next_page_flag = utils.get_item_exist(log_status, link)
 
                 if not next_page_flag:
@@ -210,12 +213,17 @@ def get_links(url, page_num=1):
         except Exception as e:
             print("Page contents Error", e)
     except ConnectionError as e:
-        print("An exception occurred, We will reprocess this action 1 hour later!", e)
-        sleep(3600)
-        print('Request again')
+        error_count +=1
+        if error_count > 3:
+            print("An exception occurred, We will reprocess this action 1 hour later!", e)
+            sleep(3600)
+        else:
+            print("Request again!")
+            sleep(1)
 
 
 def get_contract(url, region=''):
+    global error_count
     # Make a get request
     print("URL ====>", url)
     try:
@@ -269,6 +277,8 @@ def get_contract(url, region=''):
             all_links = [get_download_link(url, link['href']) for link in page_html.select(
                 'p>a[href]') if get_download_link(url, link['href'])]
 
+            error_count = 0
+
             return {
                 "contract_detail": contract,
                 "file_links": all_links,
@@ -281,8 +291,13 @@ def get_contract(url, region=''):
             return False
 
     except:
-        print('Frequency Request Error, Will handle this an hour later!')
-        sleep(3600)
+        error_count +=1
+        if error_count >3 :
+            print('Frequency Request Error, Will handle this an hour later!')
+            sleep(3600)
+        else:
+            print('Retry again!')
+            sleep(1)
         get_contract(url)
         return False
 
