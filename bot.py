@@ -152,9 +152,10 @@ def get_links(url, page_num=1):
     global error_count
     origin_url = url_split(url, 1, 0)
     page_url = url + '?pageIndex='+ str(page_num)
+    print(page_url)
 
     try:
-        response = post(page_url, headers=headers)
+        response = post(page_url, headers=headers, timeout=5)
         sleep(2)
 
         elapsed_time = time() - start_time
@@ -197,6 +198,7 @@ def get_links(url, page_num=1):
                 # Check if it is the part of last action
                 error_count = 0
                 next_page_flag = utils.get_item_exist(log_status, link)
+                print(next_page_flag)
 
                 if not next_page_flag:
                     break
@@ -204,14 +206,18 @@ def get_links(url, page_num=1):
                     print("-> New One:  ", link_date)
                     linkList.append(links(link_title, abs_url, link_date, link_region))
         
+            
             if next_page_flag == True:
                 page_num += 1
                 sleep(5)
                 linkList += get_links(url, page_num)
 
+            print('Ended')
             return linkList
         except Exception as e:
-            print("Page contents Error", e)
+            print("Web server error, try again")
+            sleep(2)
+            get_links(url, page_num)
     except ConnectionError as e:
         error_count +=1
         if error_count > 3:
@@ -219,7 +225,7 @@ def get_links(url, page_num=1):
             sleep(3600)
         else:
             print("Request again!")
-            sleep(1)
+            sleep(2)
         get_links(url, page_num)
 
 
