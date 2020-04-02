@@ -153,10 +153,11 @@ def get_links(url, page_num=1):
     origin_url = url_split(url, 1, 0)
     page_url = url + '?pageIndex='+ str(page_num)
     print(page_url)
+    linkList=[]
 
     try:
-        response = post(page_url, headers=headers, timeout=5)
-        sleep(2)
+        response = post(page_url, headers=headers, timeout=10)
+        sleep(0)
 
         elapsed_time = time() - start_time
         print('{} th request-> Frequency: {}'.format(page_num, elapsed_time))
@@ -165,68 +166,67 @@ def get_links(url, page_num=1):
         if response.status_code != 200:
             warn('Request: {}; Status code: 200'.format(elapsed_time))
 
-        try:
-            page_html = BeautifulSoup(response.text, 'html.parser')
-            links_container = page_html.select('.m_m_dljg tr')
+        page_html = BeautifulSoup(response.text, 'html.parser')
+        links_container = page_html.select('.m_m_dljg tr')
 
-            # For every link of in a single page
-            linkList = []
-            next_page_flag = False
+        # For every link of in a single page
+        next_page_flag = False
 
-            for container in links_container:
-                cells = container.find_all('td')
-                if len(cells)<1:
-                    continue
+        for container in links_container:
+            cells = container.find_all('td')
+            if len(cells)<1:
+                continue
 
-                link_title = get_txt(container.find('a'))
-                link_url = get_param(container.find('a'), 'href')
-                link_date = get_txt(cells[7])
-                if cells[8].find('a'):
-                    link_region = ''
-                else:
-                    link_region = get_txt(cells[8])
-                abs_url = origin_url + link_url
+            link_title = get_txt(container.find('a'))
+            link_url = get_param(container.find('a'), 'href')
+            link_date = get_txt(cells[7])
+            if cells[8].find('a'):
+                link_region = ''
+            else:
+                link_region = get_txt(cells[8])
+            abs_url = origin_url + link_url
 
 
-                link = {
-                    "title": link_title,
-                    "date": link_date,
-                    "region": link_region,
-                    "url": abs_url
-                }
+            link = {
+                "title": link_title,
+                "date": link_date,
+                "region": link_region,
+                "url": abs_url
+            }
 
-                # Check if it is the part of last action
-                error_count = 0
-                next_page_flag = utils.get_item_exist(log_status, link)
-                print(next_page_flag)
+            # Check if it is the part of last action
+            error_count = 0
+            next_page_flag = utils.get_item_exist(log_status, link)
 
-                if not next_page_flag:
-                    break
-                else:
-                    print("-> New One:  ", link_date)
-                    linkList.append(links(link_title, abs_url, link_date, link_region))
+            if not next_page_flag:
+                break
+            else:
+                print("-> New One:  ", link_date)
+                linkList.append(links(link_title, abs_url, link_date, link_region))
+    
         
-            
-            if next_page_flag == True:
+        if next_page_flag == True or len(linkList) == 0:
+            if len(linkList) != 0 or error_count > 10:
                 page_num += 1
-                sleep(5)
-                linkList += get_links(url, page_num)
+            else:
+                error_count += 1
 
-            print('Ended')
-            return linkList
-        except Exception as e:
-            print("Web server error, try again")
-            sleep(2)
-            get_links(url, page_num)
-    except ConnectionError as e:
+            sleep(3)
+            linkList += get_links(url, page_num)
+
+        return linkList
+    except (Exception, ConnectionError, TimeoutError) as e:
         error_count +=1
-        if error_count > 3:
+        if error_count > 6:
             print("An exception occurred, We will reprocess this action 1 hour later!", e)
             sleep(3600)
         else:
             print("Request again!")
             sleep(2)
-        get_links(url, page_num)
+
+        linkList += get_links(url, page_num)
+        return linkList
+    
 
 
 def get_contract(url, region=''):
@@ -328,7 +328,7 @@ def main():
             # Get all contract links based on category
             add_console("Grabbing new links for " + processingId)
             new_links = get_links(target["url"])
-        
+            print('all links ==>', len(new_links))
 
             # Update log with current action info when there are new updates
             if len(new_links) > 0:
