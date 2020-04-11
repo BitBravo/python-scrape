@@ -89,17 +89,19 @@ def create_folder(dir):
         print("Directory ", dir,  " already exists")
 
 
-def download_files(deal_folder_dir, file_links):
+def download_files(deal_folder_dir, file_links, file_name = False):
     if len(file_links) > 0:
         create_folder(deal_folder_dir)
 
     for link in file_links:
-        file_name = link.split('/')[-1]
+        ext = link[1].rsplit('.')[1]
+        file_name = '{}.{}'.format(file_name, ext) if file_name else link[0].split('/')[-1]
+        print('file ===>', file_name)
         file_path = deal_folder_dir + '/' + file_name
 
         print("Started downloading file:%s" % file_name)
         # create response object
-        r = get(link, stream=True)
+        r = get(link[0], stream=True)
 
         # download started
         with open(file_path, 'wb') as f:
@@ -112,8 +114,9 @@ def download_files(deal_folder_dir, file_links):
 
     return
 
-def download_html(deal_folder_dir, url, content):
-    file_name = url.split('/')[-1]
+def download_html(deal_folder_dir, url, content, file_name = False):
+    file_name = '{}.html'.format(file_name) if file_name else link.split('/')[-1]
+    print('file ===>', file_name)
     file_path = deal_folder_dir + '/' + file_name
     create_folder(deal_folder_dir)
 
@@ -163,6 +166,7 @@ def html2pdf(deal_folder_dir, url, sourceHtml):
     upload_objects(file_path)
     return pisaStatus.err
 
+
 def get_log(lists):
     try:
         with open('log.json') as json_file:
@@ -178,14 +182,16 @@ def get_log(lists):
                 "title": None
             })
         return logs
-
+        
 
 def write_log(data):
     with open('log.json', 'w') as outfile:
         json.dump(data, outfile)
 
+
 def upload_objects(file_name):
+    print( file_name.split('/', 1)[1])
     try:
-        s3_connect.upload_file(file_name, BUCKET, file_name)
+        s3_connect.upload_file(file_name, BUCKET, file_name.split('/', 1)[1])
     except ClientError as e:
         print(e)

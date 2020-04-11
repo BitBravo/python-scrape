@@ -1,16 +1,15 @@
 from bs4 import BeautifulSoup
 from requests import get, post
 from requests.exceptions import ConnectionError
-import re
-import json
-import configparser
+from urllib.parse import urlsplit, urlparse, parse_qs
 from time import sleep, time
-from random import randint
 from warnings import warn
-from collections import namedtuple
-import utils
-import schedule
 from os import system, name 
+import re
+import configparser
+import schedule
+import utils
+import inputs
 
 configParser = configparser.RawConfigParser()
 configParser.read('config.ini')
@@ -19,15 +18,8 @@ FILE_PATH = configParser.get('LOCAL', 'FILE_DIR')
 log_status = {}
 error_count = 0
 
-base_urls = [
-    { "level": "procurement", "category": "provincial_notices", "url": "http://www.ccgp-guangdong.gov.cn/queryContractList.do" },
-    { "level": "procurement", "category": "county_notices", "url": "http://www.ccgp-guangdong.gov.cn/queryCityContractList.do" },
-]
-
-field_names = {
-    "all": ['title', 'region', 'source', 'contract_number', 'contract_name', 'serial_number', 'procurement_number', 'item_name', 'supplier', 'supplier_address', 'supplier_contact', 'supplier_contact_info', 'deal_price', 'budget_price', 'contract_signed_date', 'contract_publish_date', 'purchaser', 'purchaser_address', 'purchaser_contact', 'purchaser_contact_info', 'publisher', 'published_date', 'source_url', 'id'],
-    "sub": ['title', 'category', 'publish_date', 'source_url', 'id']
-}
+base_urls = inputs.base_urls
+field_names = inputs.field_names
 
 headers = {"Accept-Language": "en-US, en;q=0.5", "User-Agent":"Mozilla/5.0"}
 
@@ -35,49 +27,63 @@ headers = {"Accept-Language": "en-US, en;q=0.5", "User-Agent":"Mozilla/5.0"}
 # Preparing the monitoring of the loop
 start_time = time()
 
-
 class links:
-    def __init__(self, title, url, date, region):
+    def __init__(self, title, url, date):
         self.title = title
         self.url = url
         self.date = date
-        self.region = region
 
 class Contracts:
     def __init__(self):
-        self.region = ''
         self.title = ''
-        self.source = ''
-        self.contract_number = ''
-        self.contract_name = ''
-        self.serial_number = ''
-        self.procurement_number = ''
-        self.item_name = ''
-        self.supplier = ''
-        self.supplier_address = ''
-        self.supplier_contact = ''
-        self.supplier_contact_info = ''
-        self.deal_price = ''
-        self.budget_price = ''
-        self.contract_signed_date = ''
-        self.contract_publish_date = ''
-        self.purchaser = ''
-        self.purchaser_address = ''
-        self.purchaser_contact = ''
-        self.purchaser_contact_info = ''
+        self.category = ''
         self.publisher = ''
-        self.published_date = ''
+        self.publish_date = ''
+        self.item_name = ''
+        self.procurement_number = ''
+        self.contract_name = ''
+        self.contract_number = ''
+        self.deal_price = ''
+        self.purchaser = ''
+        self.supplier = ''
+        self.contract_signed_date = ''
+        self.appendix = ''
         self.source_url = ''
         self.id = ''
 
 
 
-def url_split(url, index, option):
-    return url.rsplit('/', index)[option]
+def get_domain(url):
+    domain = "{0.scheme}://{0.netloc}/".format(urlsplit(url))
+    return domain.rsplit('/', 1)[0]
 
 
-def word_split(string, index):
-    return string.rsplit('->', 1)[index]
+def get_query(url, param):
+    try:
+        parsed = urlparse(url)
+        return parse_qs(parsed.query)[param][0]
+    except:
+        return None
+
+
+def get_search_str(contents, mathed):
+    try:
+        reg = mathed +'(\s)?：([\u4e00-\u9fff\uff01-\uff150-9\s〔〕.*-a-zA-Z\(\)]+)<br/>'
+        p = re.compile(reg)
+        m = p.search(str(contents))
+        return remove_space(m.groups()[1])
+    except  Exception as e:
+        print('error', e)
+        return ""
+
+
+def get_search_el(el, tag, word):
+    try:
+        element = el(tag, text=re.compile(word))[0]
+        text_content = get_txt(element).split(word)[1]
+        return remove_space(text_content)
+    except:
+        return ""
 
 
 def get_txt(string):
@@ -92,6 +98,10 @@ def get_param(el, param):
         return el[param]
     except:
         return ""
+
+
+def word_split(string, index):
+    return string.rsplit('->', 1)[index]
 
 
 def get_number(string):
@@ -124,20 +134,28 @@ def update_links(fileContents):
     return p.sub(srcrepl, fileContents)
 
 
-def get_download_link(origin_url, link):
-    p = re.compile(r"^http|^javascript")
-    if p.findall(link):
-        return False
-    else:
-        match = re.search(r'(.\/)*([..\/]+)([\w.*]+)', link)
-        if match:
-            prefix_count = len(match.group(2).split('../'))
-            file_name = match.group(3)
-            file_url = origin_url.rsplit(
-                "/", prefix_count)[0] + '/' + file_name
-            return file_url
-        else:
+def get_download_link(origin_url, linkEl):
+    try:
+        fileLink = linkEl['href']
+        fileName = get_txt(linkEl)
+
+        p = re.compile(r"^http|^javascript")
+        if p.findall(fileLink):
             return False
+        else:
+            match = re.search(r'(.\/)*([(\.\.\/)]*)([\w0-9\/.*?=&]+)', fileLink)
+            if match:
+                if not match.group(1) and not re.findall(match.group(2), '..'):
+                    return [get_domain(origin_url) + '/' + match.group(3), fileName]
+                else:
+                    prefix_count = len(match.group(2).split('../'))
+                    file_name = match.group(3)
+                    file_url = origin_url.rsplit("/", prefix_count)[0] + '/' + file_name
+                    return [file_url, fileName]
+            else:
+                return False
+    except:
+        return False
 
 
 def add_console(text):
@@ -147,17 +165,19 @@ def add_console(text):
 
 
 
-
+# Grab all contract links here
 def get_links(url, page_num=1):
     global error_count
-    origin_url = url_split(url, 1, 0)
-    page_url = url + '?pageIndex='+ str(page_num)
-    print(page_url)
     linkList=[]
+
+    origin_url = get_domain(url)
+    page_url = url + '&page='+ str(page_num)
+
+    print(page_url)
 
     try:
         response = post(page_url, headers=headers, timeout=10)
-        sleep(0)
+        sleep(3)
 
         elapsed_time = time() - start_time
         print('{} th request-> Frequency: {}'.format(page_num, elapsed_time))
@@ -167,30 +187,22 @@ def get_links(url, page_num=1):
             warn('Request: {}; Status code: 200'.format(elapsed_time))
 
         page_html = BeautifulSoup(response.text, 'html.parser')
-        links_container = page_html.select('.m_m_dljg tr')
+        links_container = page_html.select('.dataList li')
 
         # For every link of in a single page
         next_page_flag = False
 
         for container in links_container:
-            cells = container.find_all('td')
-            if len(cells)<1:
-                continue
-
             link_title = get_txt(container.find('a'))
             link_url = get_param(container.find('a'), 'href')
-            link_date = get_txt(cells[7])
-            if cells[8].find('a'):
-                link_region = ''
-            else:
-                link_region = get_txt(cells[8])
+            link_date = get_txt(container.select_one('span.time'))
+           
             abs_url = origin_url + link_url
 
 
             link = {
                 "title": link_title,
                 "date": link_date,
-                "region": link_region,
                 "url": abs_url
             }
 
@@ -201,11 +213,10 @@ def get_links(url, page_num=1):
             if not next_page_flag:
                 break
             else:
-                print("-> New One:  ", link_date)
-                linkList.append(links(link_title, abs_url, link_date, link_region))
-    
-        
-        if next_page_flag == True or len(linkList) == 0:
+                print("-> New One:  ", link_date, next_page_flag)
+                linkList.append(links(link_title, abs_url, link_date))
+
+        if next_page_flag == True:
             if len(linkList) != 0 or error_count > 10:
                 page_num += 1
             else:
@@ -228,11 +239,11 @@ def get_links(url, page_num=1):
         return linkList
     
 
-
-def get_contract(url, region=''):
+# Grab the contract detail here
+def get_contract(url, category=''):
     global error_count
     # Make a get request
-    print("URL ====>", url)
+    print("URL ====>", url, category)
     try:
         response = get(url, headers=headers)
         sleep(1)
@@ -245,45 +256,41 @@ def get_contract(url, region=''):
 
         # Parse the content of the request with BeautifulSoup
         page_html = BeautifulSoup(response.text, 'html.parser')
+
         try:
             contract = Contracts()
             # Select all the link containers from a single page
-            pageBody = page_html.select_one('.zw_c_cont')
+            pageBody = page_html.select_one('#pageContent table')
 
+            contract.id = get_query(url, 'id')
             contract.source_url = url
-            contract.id = url.rsplit("/", 1)[1].split(".")[0]
-            contract.region = region
-            contract.title = get_txt(page_html.select_one('.zw_c_c_title'))
-            contract.source = get_txt(page_html.select_one('.zw_c_c_qx span')).split(':')[1]
-            data_container = page_html.select('.public_info_fff')
-            contract.purchaser = get_txt(data_container[0])
-            contract.contract_number = get_txt(data_container[1])
-            contract.contract_name = get_txt(data_container[2])
-            contract.procurement_number = get_txt(data_container[3])
-            contract.item_name = get_txt(data_container[4])
-            contract.supplier = get_txt(data_container[5])
-            contract.supplier_address = get_txt(data_container[6])
-            contract.supplier_contact = get_param(data_container[7], 'value')
-            contract.supplier_contact_info = get_param(data_container[8], 'value')
-            contract.deal_price = get_param(data_container[9], 'value')
-            contract.budget_price = get_param(data_container[10], 'value')
-            contract.contract_signed_date = get_param(data_container[11], 'value')
-            contract.contract_publish_date = get_param(data_container[12], 'value')
-            contract.purchaser = get_txt(data_container[13])
-            contract.purchaser_address = get_txt(data_container[14])
-            contract.purchaser_contact = get_param(data_container[15], 'value')
-            contract.purchaser_contact_info = get_param(data_container[16], 'value')
-            contract.publisher = get_txt(data_container[17])
-            contract.published_date = contract.contract_publish_date.split(' ')[0]
+
+            data_container = page_html.select_one("tbody div[style*='line-height']")
+            contract.title = get_txt(data_container.select_one('font'))
+            contract.category = get_txt(page_html.select('#crumbs a')[1])
+            contract.publisher = get_txt(page_html.select("p[align='right']")[0])
+            contract.publish_date = get_txt(page_html.select("p[align='right']")[1])
+            
+            if category == 'contract_notices':
+                contract.item_name = get_search_str(data_container, '项目名称')
+                contract.procurement_number = get_search_str(data_container, '项目编号')
+                contract.contract_name = get_search_str(data_container, '合同名称')
+                contract.contract_number = get_search_str(data_container, '合同编号')
+                contract.deal_price = get_search_str(data_container, '合同金额\(万元\)')
+                contract.purchaser = get_search_str(data_container, '采购单位')
+                contract.supplier = get_search_str(data_container, '中标供应商')
+                contract.contract_signed_date = get_search_str(data_container, '合同签订日期')
+                contract.appendix = get_txt(data_container.select_one('a'))
+                all_links = [get_download_link(url, link) for link in page_html.select('tbody a[href]') if get_download_link(url, link)]
+            else:
+                contract.appendix = get_txt(page_html.select_one('.line>a'))
+                all_links = [get_download_link(url, link) for link in page_html.select('.line>a[href]') if get_download_link(url, link)]
+
 
             contract_arry = []
             for key, value in contract.__dict__.items():
                 contract_arry.append(value)
-
-            sleep(3)
-            all_links = [get_download_link(url, link['href']) for link in page_html.select(
-                'p>a[href]') if get_download_link(url, link['href'])]
-
+            
             error_count = 0
 
             return {
@@ -309,6 +316,7 @@ def get_contract(url, region=''):
         return False
 
 
+# Main Process
 def main():
     log_content = utils.get_log(base_urls)
 
@@ -316,8 +324,8 @@ def main():
         for target in base_urls:
             # Get CSV file path and File Prefix
             csv_file_name = target["category"] + ".csv"
-            csv_file_path = CSV_PATH + target["level"] + "/" + csv_file_name
-            folder_prefix = FILE_PATH + target["level"] + "/" + target["category"]
+            csv_file_path = 'results/' + CSV_PATH + target["level"] + "/" + csv_file_name
+            folder_prefix = 'results/' + FILE_PATH + target["level"] + "/" + target["category"]
             processingId = target["level"] + "->" + target["category"]
             
             # Get log content to check what is a last action
@@ -328,7 +336,9 @@ def main():
             # Get all contract links based on category
             add_console("Grabbing new links for " + processingId)
             new_links = get_links(target["url"])
-            print('all links ==>', len(new_links))
+           
+            print('{} links found'.format(len(new_links)))
+
 
             # Update log with current action info when there are new updates
             if len(new_links) > 0:
@@ -339,34 +349,35 @@ def main():
 
                 # Update log file
                 utils.write_log(log_content)
-                add_console("Starting to grab contract for " + processingId)
+                add_console("Starting to grab contract detail for " + processingId)
             else:
-                add_console("There is no new contracts in " + processingId)
+                add_console("There is no new contract in " + processingId)
 
 
             # Get contract details, Download attached files, Save html contents, and Add it to CSV 
             for link in new_links:
-                # Get sub folder name (use the contract url) 
-                deal_folder_dir = url_split(link.url, 1, 1).rsplit('.')[0]
-                folder_path = folder_prefix + "/" + deal_folder_dir
+       
+                # Get sub folder name (use the contract url)
+                notice_id = get_query(link.url, 'id')
+                folder_path = folder_prefix + "/" + notice_id
 
                 # Grab contract details
-                contract = get_contract(link.url, link.region)
+                contract = get_contract(link.url, target["category"])
 
                 # Download files and save contents
                 if contract:
-                    if target["level"] == "procurement":
-                        utils.download_html(folder_path, link.url, contract["page_content"])
-                        utils.download_files(folder_path, contract["file_links"])
+                    if target["category"] == "contract_notices":
+                        utils.download_html(folder_path, link.url, contract["page_body"], notice_id)
+                        utils.download_files(folder_path, contract["file_links"], notice_id)
                         utils.append_new_row(csv_file_path, contract["contract_detail"], field_names["all"])
                     else:
-                        utils.download_html(folder_path, link.url, contract["page_body"])
-                        utils.download_files(folder_path, contract["file_links"])
-                        # utils.html2pdf(folder_path, link.url, contract["page_body"])
+                        utils.download_html(folder_path, link.url, contract["page_body"], notice_id)
+                        utils.download_files(folder_path, contract["file_links"], notice_id)
                         utils.append_new_row(csv_file_path, contract["contract_detail"], field_names["sub"])
 
-            add_console("File Upload: " + csv_file_path)
-            utils.upload_objects(csv_file_path)
+            if len(new_links) > 0:
+                add_console("File Upload: " + csv_file_path)
+                utils.upload_objects(csv_file_path)
     
     except Exception as e:
         print("error", e)
@@ -382,6 +393,6 @@ _ = system('clear')
 #     schedule.run_pending()
 #     sleep(10)
 
+
 # Quick TEST
 main()
-
