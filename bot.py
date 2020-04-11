@@ -139,6 +139,8 @@ def get_download_link(origin_url, linkEl):
         fileLink = linkEl['href']
         fileName = get_txt(linkEl)
 
+        if not fileName:
+            return False
         p = re.compile(r"^http|^javascript")
         if p.findall(fileLink):
             return False
@@ -270,6 +272,8 @@ def get_contract(url, category=''):
             contract.category = get_txt(page_html.select('#crumbs a')[1])
             contract.publisher = get_txt(page_html.select("p[align='right']")[0])
             contract.publish_date = get_txt(page_html.select("p[align='right']")[1])
+            contract.appendix = get_txt(page_html.select_one('a[href*=down]'))            
+            all_links = [get_download_link(url, link) for link in page_html.select('a[href*=down]') if get_download_link(url, link)]
             
             if category == 'contract_notices':
                 contract.item_name = get_search_str(data_container, '项目名称')
@@ -281,10 +285,6 @@ def get_contract(url, category=''):
                 contract.supplier = get_search_str(data_container, '中标供应商')
                 contract.contract_signed_date = get_search_str(data_container, '合同签订日期')
                 contract.appendix = get_txt(data_container.select_one('a'))
-                all_links = [get_download_link(url, link) for link in page_html.select('tbody a[href]') if get_download_link(url, link)]
-            else:
-                contract.appendix = get_txt(page_html.select_one('.line>a'))
-                all_links = [get_download_link(url, link) for link in page_html.select('.line>a[href]') if get_download_link(url, link)]
 
 
             contract_arry = []
@@ -396,3 +396,5 @@ _ = system('clear')
 
 # Quick TEST
 main()
+
+
