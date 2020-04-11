@@ -17,11 +17,14 @@ CSV_PATH = configParser.get('LOCAL', 'CSV_DIR')
 FILE_PATH = configParser.get('LOCAL', 'FILE_DIR')
 log_status = {}
 error_count = 0
+headers = {"Accept-Language": "en-US, en;q=0.5", "User-Agent":"Mozilla/5.0"}
 
 base_urls = inputs.base_urls
-field_names = inputs.field_names
 
-headers = {"Accept-Language": "en-US, en;q=0.5", "User-Agent":"Mozilla/5.0"}
+field_names = {
+    "all": ['title', 'category', 'publisher', 'publish_date', 'item_name', 'procurement_number', 'contract_name', 'contract_number', 'deal_price', 'purchaser', 'supplier', 'contract_signed_date', 'appendix', 'source_url', 'id'],
+    "sub": ['title', 'category', 'publisher', 'publish_date', 'source_url', 'id']
+}
 
 
 # Preparing the monitoring of the loop

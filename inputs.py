@@ -12,8 +12,3 @@ base_urls = [
     { "level": "municipal", "category": "single_source", "url": "http://www.ccgp-tianjin.gov.cn/portal/topicView.do?id=2033" },
     { "level": "district", "category": "single_source", "url": "http://www.ccgp-tianjin.gov.cn/portal/topicView.do?id=2034" },
 ]
-
-field_names = {
-    "all": ['title', 'category', 'publisher', 'publish_date', 'item_name', 'procurement_number', 'contract_name', 'contract_number', 'deal_price', 'purchaser', 'supplier', 'contract_signed_date', 'appendix', 'source_url', 'id'],
-    "sub": ['title', 'category', 'publisher', 'publish_date', 'source_url', 'id']
-}
