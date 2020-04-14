@@ -273,8 +273,13 @@ def get_contract(url, category=''):
             data_container = page_html.select_one("tbody div[style*='line-height']")
             contract.title = get_txt(data_container.select_one('font'))
             contract.category = get_txt(page_html.select('#crumbs a')[1])
-            contract.publisher = get_txt(page_html.select("p[align='right']")[0])
-            contract.publish_date = get_txt(page_html.select("p[align='right']")[1])
+
+            elLens = len(page_html.select("p[align='right']"))
+            if elLens > 0: 
+                contract.publisher = get_txt(page_html.select("p[align='right']")[0])
+            if elLens > 1: 
+                contract.publish_date = get_txt(page_html.select("p[align='right']")[1])
+            
             contract.appendix = get_txt(page_html.select_one('a[href*=down]'))            
             all_links = [get_download_link(url, link) for link in page_html.select('a[href*=down]') if get_download_link(url, link)]
             
